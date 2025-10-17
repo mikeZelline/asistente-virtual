@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Virtual SECOP - Contratación Pública</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>💬 Asistente Virtual SECOP</h1>
+            <p>Tu asistente experto en contratación pública colombiana</p>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                <div class="message-content">
+                    ¡Hola! Soy tu asistente virtual especializado en contratación pública y el SECOP. Pregúntame lo que necesites saber.
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <form id="chatForm">
+                <input 
+                    type="text" 
+                    id="userInput" 
+                    placeholder="Escribe tu pregunta aquí..." 
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" id="sendButton">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+
+        // Función para agregar mensaje al chat
+        function addMessage(message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = message;
+            
+            messageDiv.appendChild(messageContent);
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll al final
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Función para mostrar indicador de carga
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot-message typing-indicator';
+            typingDiv.id = 'typingIndicator';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+            
+            typingDiv.appendChild(messageContent);
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Función para remover indicador de carga
+        function removeTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        // Manejar envío del formulario
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = userInput.value.trim();
+            if (!question) return;
+            
+            // Agregar mensaje del usuario
+            addMessage(question, true);
+            userInput.value = '';
+            
+            // Deshabilitar input mientras se procesa
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            
+            // Mostrar indicador de escritura
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                
+                // Remover indicador de escritura
+                removeTypingIndicator();
+                
+                if (response.ok) {
+                    addMessage(data.answer, false);
+                } else {
+                    addMessage('Error: ' + (data.error || 'Algo salió mal'), false);
+                }
+            } catch (error) {
+                removeTypingIndicator();
+                addMessage('Error de conexión: ' + error.message, false);
+            } finally {
+                // Rehabilitar input
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+            }
+        });
+
+        // Focus automático en el input
+        userInput.focus();
+    </script>
+</body>
+</html>
+
