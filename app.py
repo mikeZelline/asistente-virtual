@@ -1,9 +1,15 @@
 import os
 from flask import Flask, render_template, request, jsonify
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde archivo .env (si existe)
+load_dotenv('config.env')
 
 # Configura variables de entorno ANTES de los imports
-os.environ["USER_AGENT"] = "mi-usuario-personalizado/0.0.1"
-os.environ["OPENAI_API_KEY"] = "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"
+os.environ["USER_AGENT"] = os.getenv("USER_AGENT", "mi-usuario-personalizado/0.0.1")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
+
+
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
@@ -21,9 +27,10 @@ vector_store = None
 llm = None
 graph = None
 prompt_context = """Eres un asistente experto en contratación pública colombiana. 
-Tu trabajo es responder preguntas basándote ÚNICAMENTE en el contexto del documento que te proporciono.
+Tu trabajo es responder preguntas basándote ÚNICAMENTE en la información que te proporciono.
 Usa un tono amable y profesional, explicando en términos sencillos.
-IMPORTANTE: Si el contexto contiene información relevante, DEBES responder con esa información."""
+IMPORTANTE: Si el contexto contiene información relevante, DEBES responder con esa información.
+No menciones que la información se está extrayendo de un documento pdf."""
 
 # Estado (siguiendo patrón de LangChain)
 class State(TypedDict):
@@ -73,13 +80,15 @@ def generate(state: State):
     # Usar prompt_context cuando no hay documentos relevantes
     if not state["context"]:
         print(f"[DEBUG GENERATE] Sin documentos - enviando mensaje de rechazo")
-        no_results_prompt = f"""Eres un asistente de contratación pública colombiana.
+        no_results_prompt = f"""Eres un asistente virtual especializado en contratación pública colombiana y el SECOP.
 
-La pregunta del usuario NO tiene relación con el contenido del documento sobre contratación pública que manejo.
+La pregunta del usuario es: "{state['question']}"
 
-Pregunta del usuario: {state['question']}
+Esta pregunta NO está relacionada con tu especialización.
 
-Responde de forma amable y breve que solo puedes ayudar con preguntas sobre contratación pública y el SECOP, según el documento que tienes. Invita al usuario a hacer preguntas relacionadas con estos temas."""
+Responde de forma muy breve y amable que lamentablemente no puedes responder a esa pregunta específica, pero que estarás encantado de ayudar con cualquier tema relacionado con contratación pública colombiana o el SECOP.
+
+IMPORTANTE: NO menciones documentos, archivos PDF, información proporcionada, o contextos. Simplemente di que ese tema no es tu especialidad pero que sí conoces sobre contratación pública."""
         
         try:
             response = llm.invoke(no_results_prompt)
@@ -88,7 +97,7 @@ Responde de forma amable y breve que solo puedes ayudar con preguntas sobre cont
             return {"answer": answer.strip()}
         except Exception as e:
             print(f"[DEBUG GENERATE] Error en rechazo: {e}")
-            return {"answer": "Lo siento, solo puedo responder preguntas relacionadas con el documento de contratación pública proporcionado."}
+            return {"answer": "Lamentablemente no puedo responder esa pregunta, pero estaré encantado de ayudarte con temas relacionados con contratación pública colombiana o el SECOP."}
     
     # Si hay contexto relevante, generar respuesta basada en el documento
     print(f"[DEBUG GENERATE] CON documentos - generando respuesta basada en contexto")
@@ -102,12 +111,12 @@ Responde de forma amable y breve que solo puedes ayudar con preguntas sobre cont
     
     prompt = f"""{prompt_context}
 
-CONTEXTO DEL DOCUMENTO:
+INFORMACIÓN RELEVANTE:
 {context}
 
-PREGUNTA DEL USUARIO: {state['question']}
+PREGUNTA: {state['question']}
 
-Basándote en el contexto anterior, proporciona una respuesta clara y precisa a la pregunta del usuario:"""
+Responde la pregunta de forma clara, precisa y profesional. No menciones que consultas documentos o información externa - simplemente responde como un experto que conoce el tema:"""
     
     print(f"[DEBUG GENERATE] Invocando OpenAI...")
     try:
@@ -195,8 +204,14 @@ def chat():
 
 if __name__ == '__main__':
     initialize_system()
+    
+    # Obtener configuración desde variables de entorno
+    debug_mode = os.getenv("DEBUG_MODE", "False").lower() == "true"
+    port = int(os.getenv("PORT", "5000"))
+    
     print("\n" + "="*60)
-    print("Servidor web iniciado en http://localhost:5000")
+    print(f"Servidor web iniciado en http://localhost:{port}")
+    print(f"Modo Debug: {debug_mode}")
     print("="*60 + "\n")
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
 
