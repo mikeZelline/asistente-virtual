@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde archivo .env (si existe)
@@ -21,6 +21,18 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24).hex()  # Clave única para cada ejecución
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30 minutos
+
+# Token de sesión único por ejecución del servidor
+SESSION_TOKEN = os.urandom(16).hex()
+
+# Credenciales hardcoded
+USERS = {
+    'test': 'test123*'
+}
 
 # Variables globales para el sistema RAG
 vector_store = None
@@ -167,14 +179,54 @@ def initialize_system():
     
     print(f"Sistema inicializado: {len(docs)} páginas, {len(all_splits)} fragmentos.")
 
-# Ruta principal
+# Ruta de login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Si ya está logueado, redirigir al chat
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username in USERS and USERS[username] == password:
+            session.clear()  # Limpiar sesión anterior
+            session['logged_in'] = True
+            session['username'] = username
+            session['session_token'] = SESSION_TOKEN  # Token único de este servidor
+            session.permanent = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Usuario o contraseña incorrectos')
+    
+    return render_template('login.html')
+
+# Ruta de logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# Ruta principal (protegida)
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Verificar autenticación completa incluyendo token de sesión
+    if not session.get('logged_in') or \
+       not session.get('username') or \
+       session.get('session_token') != SESSION_TOKEN:
+        session.clear()  # Limpiar cualquier sesión inválida
+        return redirect(url_for('login'))
+    return render_template('index.html', username=session.get('username'))
 
-# Endpoint para procesar preguntas
+# Endpoint para procesar preguntas (protegido)
 @app.route('/chat', methods=['POST'])
 def chat():
+    if not session.get('logged_in') or \
+       not session.get('username') or \
+       session.get('session_token') != SESSION_TOKEN:
+        return jsonify({'error': 'No autorizado'}), 401
+    
     try:
         data = request.get_json()
         question = data.get('question', '').strip()
@@ -203,6 +255,10 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print(f"Servidor web iniciado en http://localhost:{port}")
     print(f"Modo Debug: {debug_mode}")
+    print(f"Token de sesión: {SESSION_TOKEN[:8]}...")
+    print("="*60)
+    print("IMPORTANTE: Si tenías el navegador abierto, ciérralo")
+    print("completamente y vuelve a abrirlo para limpiar las cookies.")
     print("="*60 + "\n")
     app.run(debug=debug_mode, host='0.0.0.0', port=port)
 
