@@ -48,8 +48,8 @@ def retrieve(state: State):
     print(f"[DEBUG] Pregunta: '{state['question']}'")
     print(f"[DEBUG] Scores obtenidos: {[round(score, 3) for _, score in retrieved_docs_with_scores]}")
     
-    # Umbral más permisivo
-    SIMILARITY_THRESHOLD = 1.5
+    # Umbral más estricto para evitar respuestas irrelevantes
+    SIMILARITY_THRESHOLD = 0.8
     
     relevant_docs = []
     for doc, score in retrieved_docs_with_scores:
@@ -57,14 +57,9 @@ def retrieve(state: State):
         if score < SIMILARITY_THRESHOLD:
             relevant_docs.append(doc)
     
-    # Si no hay documentos relevantes pero hay resultados, tomar el mejor
-    if not relevant_docs and retrieved_docs_with_scores:
-        print(f"[DEBUG] Ningún documento bajo threshold, tomando el mejor score")
-        best_doc, best_score = retrieved_docs_with_scores[0]
-        # Solo si no es completamente irrelevante (score < 2.0)
-        if best_score < 2.0:
-            relevant_docs.append(best_doc)
-            print(f"[DEBUG] Aceptando mejor documento con score {round(best_score, 3)}")
+    # Si no hay documentos relevantes, no forzar respuesta
+    if not relevant_docs:
+        print(f"[DEBUG] Ningún documento relevante encontrado - rechazando pregunta")
     
     print(f"[DEBUG] Documentos relevantes FINALES: {len(relevant_docs)}")
     print(f"{'='*60}\n")
@@ -80,15 +75,11 @@ def generate(state: State):
     # Usar prompt_context cuando no hay documentos relevantes
     if not state["context"]:
         print(f"[DEBUG GENERATE] Sin documentos - enviando mensaje de rechazo")
-        no_results_prompt = f"""Eres un asistente virtual especializado en contratación pública colombiana y el SECOP.
+        no_results_prompt = f"""Eres un asistente experto en contratación pública colombiana y el SECOP. 
 
-La pregunta del usuario es: "{state['question']}"
-
-Esta pregunta NO está relacionada con tu especialización.
-
-Responde de forma muy breve y amable que lamentablemente no puedes responder a esa pregunta específica, pero que estarás encantado de ayudar con cualquier tema relacionado con contratación pública colombiana o el SECOP.
-
-IMPORTANTE: NO menciones documentos, archivos PDF, información proporcionada, o contextos. Simplemente di que ese tema no es tu especialidad pero que sí conoces sobre contratación pública."""
+Pero la pregunta del usuario NO tiene relación sobre contratación pública que manejas. Responde de forma amable y breve que solo puedes ayudar con preguntas sobre contratación pública y el SECOP, no menciones nada de donde extraes la información, solo responde como si tu supieras, el usuario no sabe que la información se está extrayendo de un pdf. Invita al usuario a hacer preguntas relacionadas con estos temas.
+No digas hola, responde directamente.
+Pregunta del usuario: {state['question']}"""
         
         try:
             response = llm.invoke(no_results_prompt)
@@ -97,7 +88,7 @@ IMPORTANTE: NO menciones documentos, archivos PDF, información proporcionada, o
             return {"answer": answer.strip()}
         except Exception as e:
             print(f"[DEBUG GENERATE] Error en rechazo: {e}")
-            return {"answer": "Lamentablemente no puedo responder esa pregunta, pero estaré encantado de ayudarte con temas relacionados con contratación pública colombiana o el SECOP."}
+            return {"answer": "Soy un asistente especializado en contratación pública colombiana y el SECOP. Solo puedo ayudarte con preguntas relacionadas con estos temas. ¿En qué puedo asistirte sobre contratación pública?"}
     
     # Si hay contexto relevante, generar respuesta basada en el documento
     print(f"[DEBUG GENERATE] CON documentos - generando respuesta basada en contexto")
