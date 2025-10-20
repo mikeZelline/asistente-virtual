@@ -89,9 +89,9 @@ def generate(state: State):
         print(f"[DEBUG GENERATE] Sin documentos - enviando mensaje de rechazo")
         no_results_prompt = f"""Eres un asistente experto en contratación pública colombiana y el SECOP. 
 
-Pero la pregunta del usuario NO tiene relación sobre contratación pública que manejas. Responde de forma amable y breve que solo puedes ayudar con preguntas sobre contratación pública y el SECOP, no menciones nada de donde extraes la información, solo responde como si tu supieras, el usuario no sabe que la información se está extrayendo de un pdf. Invita al usuario a hacer preguntas relacionadas con estos temas.
-No digas hola, responde directamente.
-Pregunta del usuario: {state['question']}"""
+        Responde de forma amable y breve que solo puedes ayudar con preguntas sobre contratación pública y el SECOP, 
+        Invita al usuario a hacer preguntas relacionadas con contratación pública colombiana y el SECOP.
+        No digas hola, responde directamente."""
         
         try:
             response = llm.invoke(no_results_prompt)
@@ -169,7 +169,7 @@ def initialize_system():
     # Configurar OpenAI
     llm = ChatOpenAI(
         model="gpt-4o-mini",  # Modelo rápido y económico
-        temperature=0.3,
+        temperature=0.8,
     )
     
     # Compilar grafo
